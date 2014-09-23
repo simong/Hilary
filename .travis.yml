@@ -1,6 +1,6 @@
 language: node_js
 node_js:
-  - "0.10"
+  - "0.10.30"
 
 branches:
   only:
@@ -17,18 +17,25 @@ before_install:
   - curl -L http://debian.datastax.com/debian/repo_key | sudo apt-key add -
   - echo "deb http://debian.datastax.com/community stable main" | sudo tee -a /etc/apt/sources.list.d/dsc.sources.list
 
+  # Add ElasticSearch apt repo
+  - wget -qO - http://packages.elasticsearch.org/GPG-KEY-elasticsearch | sudo apt-key add -
+  - echo "deb http://packages.elasticsearch.org/elasticsearch/1.1/debian stable main" | sudo tee -a /etc/apt/sources.list.d/elasticsearch.sources.list
+
   # Add PPA repos for miscellaneous dependencies
   - echo 'yes' | sudo add-apt-repository ppa:oae/deps
   - echo 'yes' | sudo add-apt-repository ppa:coolwanglu/pdf2htmlex
   - sudo apt-get update
 
   # Install cassandra 2 manually
-  - sudo apt-get install -y -o Dpkg::Options::=--force-confnew cassandra=2.0.8
-  - sudo sed -i 's/-Xss180k/-Xss256k/g' /etc/cassandra/cassandra-env.sh
-  - sudo sh -c "echo 'JVM_OPTS=\"\${JVM_OPTS} -Djava.net.preferIPv4Stack=false\"' >> /etc/cassandra/cassandra-env.sh"
   - sudo service cassandra stop
+  - sudo apt-get install -y -o Dpkg::Options::=--force-confnew cassandra=2.0.8
   - sudo service cassandra start
   - sudo service cassandra status
+
+  # Install elasticsearch 1.1.1 manually
+  - sudo service elasticsearch stop
+  - sudo apt-get install -y --force-yes -o Dpkg::Options::=--force-confnew elasticsearch=1.1.1
+  - sudo service elasticsearch start
 
   # Turn off unneeded services to free some memory
   - sudo service mysql stop
@@ -64,7 +71,7 @@ before_install:
   - echo "13SirapH8t3kxUh5T5aqWXhXahMzoZRA" > APIKEY.txt
 
   # Start etherpad
-  - node node_modules/ep_etherpad-lite/node/server.js &
+  - node node_modules/ep_etherpad-lite/node/server.js &> /dev/null &
 
   # Position ourselves to start the test in "script" phase
   - cd ~/build/oaeproject/Hilary
@@ -76,7 +83,6 @@ before_install:
   - printf "\nconfig.previews.pdf2htmlEX.binary = '/usr/bin/pdf2htmlEX';" >> config.js
 
 services:
-  - elasticsearch
   - rabbitmq
   - redis-server
 
@@ -91,6 +97,8 @@ after_failure:
   # Compress the logs and upload them to Amazon S3
   - gzip tests.log
   - bin/upload_logs
+  # Output the Redis logs
+  - cat /var/log/redis/redis.log
 
 notifications:
   email:
