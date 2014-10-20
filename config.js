@@ -17,15 +17,12 @@ var bunyan = require('bunyan');
 
 var config = module.exports.config = {};
 
-// UI related config information. By default, we assume that the UI repostory
-// can be found on the same level as the Hilary folder.
-
 /**
  * `config.ui`
  *
  * Configuration namespace for the UI module.
  *
- * @param  {String}    path            The path to the UI static assets
+ * @param  {String}    path            The path to the UI static assets. By default, we assume that the UI repostory can be found on the same level as the Hilary folder
  */
 config.ui = {
     'path': '../3akai-ux'
