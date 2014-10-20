@@ -1,6 +1,6 @@
 language: node_js
 node_js:
-  - "0.10"
+  - "0.10.30"
 
 branches:
   only:
@@ -17,23 +17,43 @@ before_install:
   - curl -L http://debian.datastax.com/debian/repo_key | sudo apt-key add -
   - echo "deb http://debian.datastax.com/community stable main" | sudo tee -a /etc/apt/sources.list.d/dsc.sources.list
 
+  # Add ElasticSearch apt repo
+  - wget -qO - http://packages.elasticsearch.org/GPG-KEY-elasticsearch | sudo apt-key add -
+  - echo "deb http://packages.elasticsearch.org/elasticsearch/1.1/debian stable main" | sudo tee -a /etc/apt/sources.list.d/elasticsearch.sources.list
+
   # Add PPA repos for miscellaneous dependencies
   - echo 'yes' | sudo add-apt-repository ppa:oae/deps
   - echo 'yes' | sudo add-apt-repository ppa:coolwanglu/pdf2htmlex
   - sudo apt-get update
 
-  # Install cassandra 1.2 manually
-  - sudo apt-get install -y -o Dpkg::Options::=--force-confnew cassandra=1.2.16
-  - sudo sed -i 's/-Xss180k/-Xss256k/g' /etc/cassandra/cassandra-env.sh
-  - sudo sh -c "echo 'JVM_OPTS=\"\${JVM_OPTS} -Djava.net.preferIPv4Stack=false\"' >> /etc/cassandra/cassandra-env.sh"
+  # Install cassandra 2 manually
   - sudo service cassandra stop
+  - sudo apt-get install -y -o Dpkg::Options::=--force-confnew cassandra=2.0.8
+  - "sudo sed -i '1iMAX_HEAP_SIZE=512M\\nHEAP_NEWSIZE=48M\\n' /etc/cassandra/cassandra-env.sh"
+  - "sudo sed -i 's/rpc_server_type: sync/rpc_server_type: hsha/g' /etc/cassandra/cassandra.yaml"
+  - "sudo sed -i 's/key_cache_size_in_mb:/key_cache_size_in_mb: 0/g' /etc/cassandra/cassandra.yaml"
+  - sudo service cassandra stop
+  # Give Cassandra some time to shut down
+  - sleep 5
   - sudo service cassandra start
+  - sleep 5
   - sudo service cassandra status
+
+  # Install elasticsearch 1.1.1 manually
+  - sudo service elasticsearch stop
+  - sudo apt-get install -y --force-yes -o Dpkg::Options::=--force-confnew elasticsearch=1.1.1
+  - sudo service elasticsearch start
 
   # Turn off unneeded services to free some memory
   - sudo service mysql stop
   - sudo service memcached stop
   - sudo service postgresql stop
+
+  # Do not let Redis save to disk
+  - "sudo sed -i 's/save 900 1/#save 900 1/g' /etc/redis/redis.conf"
+  - "sudo sed -i 's/save 300 10/#save 300 10/g' /etc/redis/redis.conf"
+  - "sudo sed -i 's/save 60 10000/#save 60 10000/g' /etc/redis/redis.conf"
+  - sudo service redis-server restart
 
   # We must ensure phantomjs is not available so the travis build will include it in node_modules when deploying
   - sudo rm -rf /usr/local/phantomjs
@@ -45,17 +65,17 @@ before_install:
 
   # Install etherpad
   - cd /usr/src
-  - sudo wget https://s3.amazonaws.com/oae-releases/etherpad/1.4/etherpad-1.4.0_node-0.10.17.tar.gz
+  - sudo wget https://s3.amazonaws.com/oae-releases/etherpad/1.4/etherpad-1.4.0-63-14f9c91_node-0.10.17.tar.gz
   - sudo mkdir /opt/etherpad
   - cd /opt/etherpad
-  - sudo tar -zxvf /usr/src/etherpad-1.4.0_node-0.10.17.tar.gz > /dev/null
+  - sudo tar -zxvf /usr/src/etherpad-1.4.0-63-14f9c91_node-0.10.17.tar.gz > /dev/null
   - sudo touch APIKEY.txt
   - sudo chmod -R 777 .
 
   # Create a keyspace that we can start etherpad up into. There is a chicken-and-egg problem by having unit tests drop/create and have
   # etherpad be available, so we just create a separate keyspace for it
   - "echo \"CREATE KEYSPACE etherpad WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};\" > /tmp/.create_etherpad_keyspace.cql3"
-  - cqlsh -3 -f /tmp/.create_etherpad_keyspace.cql3
+  - cqlsh -f /tmp/.create_etherpad_keyspace.cql3
 
   # Configure etherpad
   - "sed -i 's/dbType\" : \"dirty/dbType\" : \"cassandra/g' settings.json"
@@ -64,7 +84,7 @@ before_install:
   - echo "13SirapH8t3kxUh5T5aqWXhXahMzoZRA" > APIKEY.txt
 
   # Start etherpad
-  - node node_modules/ep_etherpad-lite/node/server.js &
+  - node node_modules/ep_etherpad-lite/node/server.js &> /dev/null &
 
   # Position ourselves to start the test in "script" phase
   - cd ~/build/oaeproject/Hilary
@@ -76,7 +96,6 @@ before_install:
   - printf "\nconfig.previews.pdf2htmlEX.binary = '/usr/bin/pdf2htmlEX';" >> config.js
 
 services:
-  - elasticsearch
   - rabbitmq
   - redis-server
 
@@ -95,4 +114,7 @@ after_failure:
 notifications:
   email:
     - oae-team@collab.sakaiproject.org
-  irc: "irc.freenode.org#oae"
+  irc:
+    channels:
+        - "irc.freenode.org#oae"
+    skip_join: true

@@ -62,6 +62,7 @@ config.redis = {
  * @param  {String}     globalAdminAlias            The tenant alias that will be used for the global admins
  * @param  {String}     globalAdminHost             The hostname on which the global admin server can be reached by users
  * @param  {Number}     globalAdminPort             The network port on which the global admin express server can run
+ * @param  {String}     [shibbolethSPHost]          The hostname on which the Shibboleth SP has been mounted
  * @param  {String}     [serverInternalAddress]     The internal hostname on which the server can be reached by OAE services such as the preview processor
  * @param  {Number}     tenantPort                  The network port on which the tenant express server can run
  * @param  {Boolean}    useHttps                    Whether or not the server is accessible via HTTPS. Hilary will *not* expose an HTTPS server, it's up to a frontend server such as Apache or Nginx to deal with the actual delivery of HTTPS traffic. This flag is mainly used to generate correct backlinks to the web application
@@ -71,6 +72,7 @@ config.servers = {
     'globalAdminAlias': 'admin',
     'globalAdminHost': 'admin.oae.com',
     'globalAdminPort': 2000,
+    'shibbolethSPHost': 'shib-sp.oae.com',
     'serverInternalAddress': null,
     'tenantPort': 2001,
     'useHttps': false,
@@ -100,6 +102,7 @@ config.files = {
         'enabled': true,
         'interval': 2*60*60
     },
+    'limit': '4096mb',
     'localStorageDirectory': '../files'
 };
 
@@ -256,7 +259,7 @@ config.previews = {
         'binary': 'pdftk',
         'timeout': 120000
     },
-    'pdf2htmlEX':{
+    'pdf2htmlEX': {
         'binary': 'pdf2htmlEX',
         'timeout': 120000
     },
@@ -288,7 +291,7 @@ config.signing = {
  * Configuration namespace for activities.
  *
  * @param  {Boolean}    [processActivityJobs]           Whether or not this server node should produce and route activities. Defaults to `true`
- * @param  {Number}     [activityTtl]                   The time-to-live (in seconds) for generated activities. After this period of time, an activity in an activity feed is lost permanently. Defaults to 2 weeks
+ * @param  {Number}     [activityTtl]                   The time-to-live (in seconds) for generated activities. After this period of time, an activity in an activity feed is lost permanently. Defaults to 2 months
  * @param  {Number}     [aggregateIdleExpiry]           The amount of time (in seconds) an aggregate can be idle until it expires. The "idle" time of an aggregate is reset when a new activity occurs that matches the aggregate. Defaults to 3 hours
  * @param  {Number}     [aggregateMaxExpiry]            An upper-bound on the amount of time (in seconds) for which an aggregate can live. Defaults to 1 day
  * @param  {Number}     [numberOfProcessingBuckets]     The number of buckets available for parallel processing of activities. Defaults to 3
@@ -299,6 +302,7 @@ config.signing = {
  * @param  {Number}     [collectionBatchSize]           The number of items to process at a time when collecting bucketed activities. After one batch has been collected, the activity processor will immediately continue to process the next batch from that bucket, and so on. Defaults to 1000
  * @param  {Object}     [mail]                          Configuration for aggregated emails
  * @param  {Number}     [mail.pollingFrequency]         How often (in seconds) the email processing buckets are polled for new activities. This frequency will roughly determine the delay between an activity and sending an email for a user who has selected `immediate` and is involved in the activity. It should always be less than an hour
+ * @param  {Number}     [mail.gracePeriod]              The minimum amount of time (in seconds) that should pass before the email process can send out an e-mail for an activity. This is to allow further activities to aggregate with the activity that triggered the email. Defaults to 3 minutes
  * @param  {Object}     [mail.daily]                    Configuration for the daily email aggregate collection cycle
  * @param  {Number}     [mail.daily.hour]               At what hour during the day email should be collected for daily aggregates
  * @param  {Object}     [mail.weekly]                   Configuration for the weekly email aggregate collection cycle
@@ -312,7 +316,7 @@ config.signing = {
  */
 config.activity = {
     'processActivityJobs': true,
-    'activityTtl': 2 * 7 * 24 * 60 * 60,    // 2 weeks (in seconds)
+    'activityTtl': 2 * 30 * 24 * 60 * 60,   // 2 months (in seconds)
     'numberOfProcessingBuckets': 3,
     'aggregateIdleExpiry': 3 * 60 * 60,     // 3 hours (in seconds)
     'aggregateMaxExpiry': 24 * 60 * 60,     // 1 day (in seconds)
@@ -322,7 +326,8 @@ config.activity = {
     'collectionPollingFrequency': 5,        // 5 seconds
     'collectionBatchSize': 1000,
     'mail': {
-        'pollingFrequency': 10 * 60,        // 10 minutes
+        'pollingFrequency': 15 * 60,        // 15 minutes
+        'gracePeriod':  3 * 60,             // 3 minutes
         'daily': {
             'hour': 8                       // 8AM
         },
@@ -369,17 +374,6 @@ config.email = {
             'pass': 'myemailpassword'
         }
     }
-};
-
-/**
- * `config.saml`
- *
- * Configuration namespace for the saml logic
- *
- * @param  {String}    SAMLParserJarPath     The path towards the Java binary that can be used to decrypt SAML messages. This only needs to be configured if you want to enable the Shibboleth strategy. See https://github.com/oaeproject/SAMLParser
- */
-config.saml = {
-    'SAMLParserJarPath': ''
 };
 
 /**
